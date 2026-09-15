@@ -68,3 +68,19 @@ LD_LIBRARY_PATH=$PWD/syslib xvfb-run -a -s "-screen 0 1280x1024x24" \
    NOT claimed as validated; the stand-in path skips alignment (already in the true mm frame).
 3. Nothing here used real phone photos — the capture stage is synthetic by design (40–80 view requirement met
    with 48 rendered views).
+
+## Stage 0 (buy-vs-print gate) — added 2026-09-15
+
+`00_buy_vs_print.py` + `run_pipeline.sh` add a decision gate before any scanning:
+photos + description → `sourcing/brief.json` (contact sheet + search queries) →
+real listings pasted into `sourcing/candidates.json` → print-cost estimate
+(filament + machine hours + electricity + 20% failure markup, optional labor)
+vs cheapest landed buy price → `sourcing/decision.json` (`BUY` / `PRINT` /
+`UNCERTAIN`). Verified 2026-09-15 on this host: `--demo` passes 4 synthetic
+scenarios (buy-cheaper → BUY, print-cheaper → PRINT, no listings → PRINT,
+tolerance < 0.3 mm → BUY); `--brief` builds the contact sheet; `--decide`
+writes a correct decision.json; `run_pipeline.sh` stops before stage 1 on BUY
+(exit 0, prints where to buy) and continues on PRINT. Live shopping search is
+best-effort only (needs `SERPAPI_API_KEY` or `BRAVE_API_KEY`); without a key
+the brief instructs manual web/reverse-image search. Auto-filled listings are
+flagged `"auto": true` and must be reviewed before ordering.

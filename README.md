@@ -1,11 +1,12 @@
 # phone-to-print-3d
 
-End-to-end open-source pipeline that clones a physical part from cellphone photos into a 3D-printer-ready file: photos → photogrammetry → mesh repair & scaling → STL/3MF → G-code.
+End-to-end open-source pipeline that clones a physical part from cellphone photos into a 3D-printer-ready file: **buy-vs-print check** → photos → photogrammetry → mesh repair & scaling → STL/3MF → G-code.
 
 ## Pipeline
 
 | Step | Script | What it does |
 |---|---|---|
+| 0. Buy-vs-print gate | `00_buy_vs_print.py` | From your part photos + description, searches for buyable equivalents and compares landed price vs true print cost; verdict BUY stops here, PRINT continues |
 | 1. Capture | `01_render.py` | Renders 48 orbit views of a test bracket (synthetic stand-in — replace `images/` with your own phone photos) |
 | 2a. Sparse reconstruction | `02_colmap.sh sparse` | COLMAP SfM: feature extraction → matching → mapping (CPU) |
 | 2b. Dense reconstruction | `02_colmap.sh dense` | COLMAP PatchMatchStereo + fusion — **requires a CUDA GPU** |
@@ -14,6 +15,46 @@ End-to-end open-source pipeline that clones a physical part from cellphone photo
 | 5. Slice | `04_slice.sh` | OrcaSlicer CLI → print-ready G-code |
 
 `REPORT.md` has the full verification log; `result.json` has the machine-readable summary.
+
+## Stage 0: buy before you print
+
+Scanning and printing a part costs real time and filament. Stage 0 answers
+first: *can you just buy it, and is buying cheaper?*
+
+```bash
+# 1. build a sourcing brief from your photos (contact sheet + search queries)
+python 00_buy_vs_print.py --brief --photos images/ \
+  --desc "dishwasher lower rack wheel, Bosch SHXM63WS5N" \
+  --dims 48x32x20mm --material PETG --qty 4
+
+# 2. search the web / reverse-image-search the contact sheet (Google Lens),
+#    paste real listings into sourcing/candidates.json
+#    (template: sourcing/candidates.example.json).
+#    With SERPAPI_API_KEY or BRAVE_API_KEY set, step 1 also tries an
+#    automatic shopping search and pre-fills candidates (review them!).
+
+# 3. decide
+python 00_buy_vs_print.py --decide
+```
+
+Decision logic (`sourcing/decision.json`):
+
+- **Print cost** is estimated from the bounding box: filament (density × $/kg per
+  material) + machine hours (~12 g/h) + electricity + 20% failure/waste markup,
+  plus optional labor (`--labor-rate`).
+- **Buy cost** is the cheapest candidate's landed price (price + shipping).
+- `BUY` if buy ≤ 80% of print cost; `PRINT` if print ≤ 80% of buy cost;
+  otherwise `UNCERTAIN` with a tie-break note (lead time vs machine time).
+- Hard overrides: no candidates found → `PRINT`; required tolerance < 0.3 mm
+  (tighter than phone photogrammetry can hold) → `BUY`/remodel in CAD.
+
+`./run_pipeline.sh` runs the whole flow: on `BUY` it prints where to buy and
+stops before any scanning; on `PRINT` it continues through steps 1–5.
+
+```bash
+./run_pipeline.sh -- --dims 48x32x20mm --material PETG   # extra args go to stage 0
+python 00_buy_vs_print.py --demo   # verify the decision math on 4 synthetic scenarios
+```
 
 ## Verified results (2026-09-14, Ubuntu 24.04, no GPU)
 
