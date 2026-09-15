@@ -8,7 +8,10 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 export LD_LIBRARY_PATH="$HERE/syslib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 OUT="$HERE/out"
 APP="$HERE/orca.AppImage"
-STL="$OUT/part_clean.stl"
+# Prefer the watertight-gate output; fall back to the postprocess STL when the
+# gate was not run (legacy flow).
+STL="$OUT/part_watertight.stl"
+[ -f "$STL" ] || STL="$OUT/part_clean.stl"
 GCODE="$OUT/part_clean.gcode"
 
 [ -x "$APP" ] || { echo "missing $APP"; exit 1; }

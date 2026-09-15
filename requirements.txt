@@ -4,7 +4,8 @@ scipy==1.18.1
 pillow==12.3.0
 pyrender==0.1.45
 PyOpenGL==3.1.10
-opencv-python-headless==5.0.0
+opencv-python-headless==5.0.0.93
 pymeshfix==0.18.1
+networkx
 pymeshlab==2025.7.post1
 lxml

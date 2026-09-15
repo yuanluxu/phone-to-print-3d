@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>拍摄引导 · phone-to-print-3d</title>
+<style>
+  :root { --bg:#14161a; --card:#1e2228; --txt:#e8eaed; --dim:#9aa0a6;
+          --red:#e5534b; --yel:#d29922; --grn:#3fb950; --acc:#58a6ff; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--txt);
+         font-family:-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+         padding:12px 12px 40px; max-width:640px; margin-left:auto; margin-right:auto; }
+  h1 { font-size:20px; margin:8px 0 4px; }
+  h2 { font-size:16px; margin:20px 0 8px; color:var(--acc); }
+  p.hint { color:var(--dim); font-size:13px; margin:4px 0 12px; line-height:1.6; }
+  .card { background:var(--card); border-radius:12px; padding:12px; margin-bottom:12px; }
+  .plan-row { display:flex; align-items:center; gap:8px; margin:8px 0; font-size:15px; }
+  .plan-row label { flex:1; }
+  .plan-row input { width:64px; font-size:16px; padding:6px; border-radius:8px;
+                    border:1px solid #444; background:#101216; color:var(--txt); text-align:center; }
+  .ring-title { display:flex; justify-content:space-between; align-items:baseline; margin:10px 0 6px; }
+  .ring-title b { font-size:15px; }
+  .ring-title span { font-size:12px; color:var(--dim); }
+  .ring-title.current b { color:var(--yel); }
+  .grid { display:grid; gap:6px; }
+  .cell { aspect-ratio:1.6; border-radius:8px; border:2px solid #3a3f47;
+          background:#2a1215; color:var(--red); font-size:13px; font-weight:700;
+          display:flex; align-items:center; justify-content:center; cursor:pointer;
+          user-select:none; min-height:44px; }
+  .cell.done { background:#0f2c18; border-color:var(--grn); color:var(--grn); }
+  .ring-title.current .grid-hint::after { content:" ← 当前环"; color:var(--yel); }
+  .progress-wrap { position:sticky; top:0; background:var(--bg); padding:8px 0; z-index:5; }
+  .bar { height:10px; background:#2a2e35; border-radius:6px; overflow:hidden; }
+  .bar > div { height:100%; background:var(--grn); width:0%; transition:width .2s; }
+  .pct { font-size:14px; margin-top:4px; color:var(--dim); }
+  .check { display:flex; gap:10px; align-items:flex-start; padding:10px 4px;
+           border-bottom:1px solid #2a2e35; font-size:15px; line-height:1.5; }
+  .check:last-child { border-bottom:none; }
+  .check input { width:22px; height:22px; margin-top:2px; flex-shrink:0; accent-color:var(--grn); }
+  .check small { display:block; color:var(--dim); font-size:13px; margin-top:2px; }
+  .btn { display:block; width:100%; padding:12px; margin-top:12px; font-size:16px;
+         border:none; border-radius:10px; background:#2a2e35; color:var(--txt); cursor:pointer; }
+  .btn.danger { background:#3a1d1d; color:#ff9d97; }
+  .legend { display:flex; gap:12px; font-size:13px; color:var(--dim); margin:8px 0; }
+  .dot { display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:4px; vertical-align:-1px; }
+</style>
+</head>
+<body>
+
+<div class="progress-wrap">
+  <div class="bar"><div id="bar"></div></div>
+  <div class="pct" id="pct">0 / 0（0%）</div>
+</div>
+
+<h1>📷 拍摄引导</h1>
+<p class="hint">按环形计划绕着零件拍：每环等角度分布，相邻照片重叠 60% 以上。点一下格子标记已拍，可随时调整每环张数。</p>
+
+<div class="card">
+  <h2 style="margin-top:0">① 拍摄计划</h2>
+  <div class="plan-row"><label>低环（约 20° 俯角）张数</label><input id="n0" type="number" min="4" max="36" value="8"></div>
+  <div class="plan-row"><label>中环（约 45° 俯角）张数</label><input id="n1" type="number" min="4" max="36" value="10"></div>
+  <div class="plan-row"><label>高环（约 70° 俯角）张数</label><input id="n2" type="number" min="4" max="36" value="12"></div>
+  <div class="plan-row"><label>顶部俯视补拍张数</label><input id="nt" type="number" min="0" max="12" value="4"></div>
+  <p class="hint">建议总量 60–120 张：太少配准失败，太多收益递减。先拍完一环再换高度。</p>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0">② 覆盖率</h2>
+  <div class="legend">
+    <span><span class="dot" style="background:#2a1215;border:1px solid var(--red)"></span>未拍</span>
+    <span><span class="dot" style="background:#0f2c18;border:1px solid var(--grn)"></span>已拍</span>
+    <span style="color:var(--yel)">黄色标题 = 当前环</span>
+  </div>
+  <div id="rings"></div>
+  <button class="btn danger" id="reset">↺ 清空全部标记</button>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0">③ 拍摄要点</h2>
+  <div id="checks"></div>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0">④ 转台模式（可选）</h2>
+  <p class="hint">把手机固定在三脚架上、零件放转盘/手动转：每转固定角度拍一张（如每 30° 一张），光线和对焦全程不变，配准成功率最高。可用下面计时器辅助。</p>
+  <div class="plan-row"><label>转台每步间隔（秒）</label><input id="interval" type="number" min="2" max="60" value="5"></div>
+  <button class="btn" id="timerBtn">▶ 开始计时</button>
+  <p class="hint" id="timerMsg">每到间隔会震动/提示一声，手动转一步、等稳了再拍。</p>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var RINGS = [
+    {name:"低环", sub:"约 20° 俯角 · 拍零件侧面"},
+    {name:"中环", sub:"约 45° 俯角 · 拍侧面与顶部过渡"},
+    {name:"高环", sub:"约 70° 俯角 · 拍顶面细节"},
+    {name:"顶部俯视", sub:"正上方补拍"}
+  ];
+  var CHECKS = [
+    ["漫射光，避开直射硬光", "阴天窗边或柔光罩最好；硬阴影和过曝高光是重建杀手。"],
+    ["相邻照片重叠 60% 以上", "每走一小步拍一张，不要跳角度。"],
+    ["对焦锁定", "点按零件对焦后长按锁定 AE/AF，避免逐张跑焦。"],
+    ["放参照尺", "零件旁边放钢尺/硬币/打印的刻度卡，后续定标用。"],
+    ["零件全程不动", "转的是你（或转台），不是零件；反光件可考虑显像剂。"],
+    ["每环走完一圈再换高度", "先低环 360°，再中环、高环，最后顶部。"]
+  ];
+  var KEY = "ptp3d_capture_guide_v1";
+
+  var state = { counts:[8,10,12,4], done:{}, checks:{} };
+  try {
+    var saved = JSON.parse(localStorage.getItem(KEY) || "null");
+    if (saved && saved.counts) state = saved;
+  } catch(e){}
+
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){} }
+
+  var ringsEl = document.getElementById("rings");
+  var checksEl = document.getElementById("checks");
+
+  // plan inputs
+  ["n0","n1","n2","nt"].forEach(function(id, i){
+    var el = document.getElementById(id);
+    el.value = state.counts[i];
+    el.addEventListener("change", function(){
+      var v = Math.max(0, Math.min(36, parseInt(el.value||"0",10)));
+      el.value = v; state.counts[i] = v; save(); render();
+    });
+  });
+
+  // checklist
+  CHECKS.forEach(function(c, i){
+    var div = document.createElement("label");
+    div.className = "check";
+    var box = document.createElement("input");
+    box.type = "checkbox"; box.checked = !!state.checks[i];
+    box.addEventListener("change", function(){ state.checks[i]=box.checked; save(); });
+    var txt = document.createElement("div");
+    txt.innerHTML = "<b></b><small></small>";
+    txt.querySelector("b").textContent = c[0];
+    txt.querySelector("small").textContent = c[1];
+    div.appendChild(box); div.appendChild(txt);
+    checksEl.appendChild(div);
+  });
+
+  function key(r, i){ return r+":"+i; }
+
+  function render(){
+    ringsEl.innerHTML = "";
+    var total=0, doneN=0, firstOpen=-1;
+    // find current ring: first ring with any unshot cell
+    for (var r=0; r<4; r++){
+      var n = state.counts[r];
+      var open = false;
+      for (var i=0;i<n;i++){ if(!state.done[key(r,i)]){ open=true; break; } }
+      if (open && firstOpen<0) firstOpen=r;
+    }
+    for (var r=0; r<4; r++){
+      (function(r){
+        var n = state.counts[r];
+        var wrap = document.createElement("div");
+        var title = document.createElement("div");
+        title.className = "ring-title" + (r===firstOpen ? " current" : "");
+        title.innerHTML = "<b></b><span></span>";
+        title.querySelector("b").textContent = RINGS[r].name + "（"+n+" 张）";
+        title.querySelector("span").textContent = RINGS[r].sub;
+        wrap.appendChild(title);
+        var grid = document.createElement("div");
+        grid.className = "grid";
+        grid.style.gridTemplateColumns = "repeat(" + Math.min(n,6) + ", 1fr)";
+        for (var i=0;i<n;i++){
+          (function(i){
+            total++;
+            var c = document.createElement("div");
+            c.className = "cell" + (state.done[key(r,i)] ? " done" : "");
+            c.textContent = state.done[key(r,i)] ? "✓" : (i+1);
+            if (state.done[key(r,i)]) doneN++;
+            c.addEventListener("click", function(){
+              var k = key(r,i);
+              state.done[k] = !state.done[k];
+              save(); render();
+            });
+            grid.appendChild(c);
+          })(i);
+        }
+        wrap.appendChild(grid);
+        ringsEl.appendChild(wrap);
+      })(r);
+    }
+    var pct = total ? Math.round(100*doneN/total) : 0;
+    document.getElementById("bar").style.width = pct + "%";
+    document.getElementById("pct").textContent = doneN+" / "+total+"（"+pct+"%）";
+  }
+
+  document.getElementById("reset").addEventListener("click", function(){
+    if (confirm("清空全部拍摄标记？")){ state.done={}; save(); render(); }
+  });
+
+  // turntable timer
+  var timerId=null;
+  var btn=document.getElementById("timerBtn"), msg=document.getElementById("timerMsg");
+  btn.addEventListener("click", function(){
+    if (timerId){ clearInterval(timerId); timerId=null; btn.textContent="▶ 开始计时"; return; }
+    var sec = Math.max(2, parseInt(document.getElementById("interval").value||"5",10));
+    var left=sec;
+    btn.textContent="⏸ 停止";
+    msg.textContent="还有 "+left+" 秒…";
+    timerId=setInterval(function(){
+      left--;
+      if (left<=0){
+        try{ if(navigator.vibrate) navigator.vibrate(200); }catch(e){}
+        try{ new AudioContext(); }catch(e){}
+        msg.textContent="⏰ 转一步、等稳、拍！";
+        left=sec;
+      } else {
+        msg.textContent="还有 "+left+" 秒…";
+      }
+    },1000);
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

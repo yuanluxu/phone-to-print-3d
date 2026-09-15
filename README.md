@@ -7,12 +7,15 @@ End-to-end open-source pipeline that clones a physical part from cellphone photo
 | Step | Script | What it does |
 |---|---|---|
 | 0. Buy-vs-print gate | `00_buy_vs_print.py` | From your part photos + description, searches for buyable equivalents and compares landed price vs true print cost; verdict BUY stops here, PRINT continues |
-| 1. Capture | `01_render.py` | Renders 48 orbit views of a test bracket (synthetic stand-in — replace `images/` with your own phone photos) |
+| 1a. Capture | `01_render.py` | Renders 48 orbit views of a test bracket (synthetic stand-in — replace `images/` with your own phone photos) |
+| 1b. Capture QC | `01b_capture_qc.py` | Flags blurry / over-/under-exposed / wrong-resolution / duplicate photos before you waste compute; writes `qc_report.json` |
+| 1c. Capture guide | `capture-guide.html` | Phone-friendly single-file page (Chinese): ring shoot plan, tap-to-mark coverage grid, checklist, turntable timer — open in a mobile browser |
 | 2a. Sparse reconstruction | `02_colmap.sh sparse` | COLMAP SfM: feature extraction → matching → mapping (CPU) |
 | 2b. Dense reconstruction | `02_colmap.sh dense` | COLMAP PatchMatchStereo + fusion — **requires a CUDA GPU** |
 | 3. Dense stand-in (no GPU) | `03b_fuse_standin.py` | Labeled fallback: fuses rendered depth + noise into a dense cloud when dense MVS can't run |
 | 4. Repair, scale, export | `03_postprocess.py` | PyMeshFix repair → scale to real mm → watertight check → binary STL + 3MF |
-| 5. Slice | `04_slice.sh` | OrcaSlicer CLI → print-ready G-code |
+| 4b. Watertight gate | `03c_watertight_gate.py` | Final printability gate: hole fill → drop floaters → verify watertight/manifold; writes `part_watertight.stl` + JSON report; blocks slicing on failure |
+| 5. Slice | `04_slice.sh` | OrcaSlicer CLI → print-ready G-code (slices the watertight-gate output) |
 
 `REPORT.md` has the full verification log; `result.json` has the machine-readable summary.
 
@@ -76,12 +79,20 @@ Dense MVS did **not** run on the verification host (COLMAP's PatchMatchStereo is
 
 ```bash
 python 01_render.py            # or drop your phone photos into images/
+# (optional, recommended) open capture-guide.html on your phone while shooting
+python 01b_capture_qc.py images/ --out qc_report.json   # flag bad photos first
 ./02_colmap.sh sparse
 ./02_colmap.sh dense          # needs CUDA; skip on CPU-only machines
 python 03b_fuse_standin.py    # only if you skipped real dense
 python 03_postprocess.py --standin
-./04_slice.sh
+python 03c_watertight_gate.py # printability gate; blocks slicing on failure
+./04_slice.sh                 # slices out/part_watertight.stl
 ```
+
+`./run_pipeline.sh` runs all of the above in order: Stage 0 decides BUY
+(stop) vs PRINT/UNCERTAIN (continue); capture QC warns when the retake ratio
+exceeds 25% (`QC_MAX_RETAKE` env, prompts on a TTY); the watertight gate stops
+the pipeline before slicing if the mesh is not printable.
 
 ## Honest limitations
 
